@@ -1,5 +1,6 @@
 from Bio import SeqIO
-import itertools
+import pandas as pd
+from itertools import compress
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -8,9 +9,9 @@ parser.add_argument('exons', help='Enter the numbers of exons, separated by spac
 args = parser.parse_args()
 
 
-def roi_bio_analyzer(locus_name, exons, ins_amb='insoluble_ambiguities', dec_uni=' decidable_uniqueness'):
-    insoluble_ambiguities = []  # лист хранит тьюплы неразличимых аллелей
-    decidable_uniqueness = []  # лист хранит тьюплы различимых аллелей
+def roi_bio_analyzer(locus_name, exons, ins_amb='insoluble_ambiguities', dec_uni='decidable_uniqueness'):
+    exons = [int(i) for i in exons]
+    uniq_alleles = set()  # содержит названия уникальных аллелей
     allele_names = []  # лист имен аллелей
     total_exon_names_seqs = []  # лист для хранение отображений последовательностей на экзоны
     hla = SeqIO.parse('hla.dat', 'imgt')  # создает генератор
@@ -18,37 +19,36 @@ def roi_bio_analyzer(locus_name, exons, ins_amb='insoluble_ambiguities', dec_uni
         if allele.description.split(',')[0].startswith(locus_name) and len(
                 allele.seq) > 1:  # сортировка по названию и существующей последовательности
             allele_names.append(
-                allele.description.split(',')[0])  # захват классификационного названия аллели из описания
-            exon_seqs = {f.qualifiers['number'][0]: allele.seq[f.location.start:f.location.end] for f in allele.features
-                         if f.type == 'exon'}  # номер экзона: экзонная последовательность, если тип экзон
+                allele.description.split(',')[0])  # захват классификационного названnpия аллели из описания
+            exon_seqs = {int(f.qualifiers['number'][0]): str(allele.seq[f.location.start:f.location.end]) for f in
+                         allele.features if
+                         f.type == 'exon'}  # номер экзона: экзонная последовательность, если тип экзон
             total_exon_names_seqs.append(exon_seqs)
     if len(allele_names) == 0:
         return f'{locus_name} is not a part of the HLA system, please double check or contact authors'
     allele_exon = dict(zip(allele_names, total_exon_names_seqs))
-    for name in itertools.combinations(allele_names, 2):  # все возможные комбинации 2 аллелей
-        flags = []  # лист хранит экзонные флаги на отличие
-        for exon in exons:
-            if exon not in allele_exon[name[0]] and exon not in allele_exon[name[1]]:
-                continue  # экзона нет нигде, на нет и суда нет
-            if exon in allele_exon[name[0]] and exon in allele_exon[name[1]] and allele_exon[name[0]][exon] == \
-                    allele_exon[name[1]][exon]:
-                flags.append(False)  # экзоны есть и одинаковые, нельзя различить
-            if exon in allele_exon[name[0]] and exon in allele_exon[name[1]] and allele_exon[name[0]][exon] != \
-                    allele_exon[name[1]][exon]:
-                flags.append(True)  # экзоны есть и они не одинаковые, можно различить
-            if exon not in allele_exon[name[0]] or exon not in allele_exon[name[1]]:
-                flags.append(True)  # экзон только в 1 аллели, можно различить
-        if sum(flags) > 0:
-            decidable_uniqueness.append(name)  # если есть хоть 1 флаг различия, то различить можно
+    df = pd.DataFrame(allele_exon)  # создаем dataframe,  где индексы - экзоны, колонки -аллели
+    df = df.loc[exons,].reset_index().drop(labels='index', axis=1)  # ресет индексов для итерации
+    solved_alleles = []  # хранит имена неразрешимых неоднозначных аллелей, чтобы лишний раз по ним не проходить
+    for allele_name in allele_names:
+        if allele_name in solved_alleles:
+            continue  # пропускаем, так как аллель уже обработан в прошлом запросе
+        for i in df.index:
+            df.loc[i,] = df.loc[i,].fillna(value=df[allele_name][i])  # Nan=последовательность аллели
+        bool_array = df.apply(lambda x: sum(x == df[allele_name]) == len(df.index)).tolist()  # поэкзонное сравнение
+        if sum(bool_array) == 1:  # аллель совпала только с собой
+            for elm in compress(allele_name, bool_array):  # находим эту аллель по бинарному ключу
+                uniq_alleles.add(elm)  # добавляем в множестно уникальных аллелей
         else:
-            insoluble_ambiguities.append(name)  # если сумма равна нули, значит лист содержит только False
-    with open(dec_uni, 'a') as out:  # запись файла различимых аллелей
-        for elm in decidable_uniqueness:
-            out.write(f'{elm}' + '\n')
-    with open(ins_amb, 'a') as out:  # запись файла неразличимых аллелей
-        for elm in insoluble_ambiguities:
-            out.write(f'{elm}' + '\n')
+            amb_alleles = set(compress(allele_names, bool_array))  # множество уникальных аллелей по бинарному ключу
+            solved_alleles.extend(amb_alleles)
+            with open(ins_amb, 'a') as out:
+                out.write(f'{amb_alleles}' + '\n')  # записываем множество неуникальных аллелей
+    with open(dec_uni, 'a') as out:
+        for elm in uniq_alleles:
+            out.write(f'{elm}' + '\n')  # записываем множество уникальных аллелей
     return "The program has finished it's work"
 
 
-print(roi_bio_analyzer(locus_name=args.locus, exons=args.exons))
+if __name__ == '__main__':
+    print(roi_bio_analyzer(locus_name=args.locus, exons=args.exons))
