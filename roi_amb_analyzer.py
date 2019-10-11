@@ -1,6 +1,6 @@
 from Bio import SeqIO
 import pandas as pd
-from itertools import compress
+import time
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -10,8 +10,10 @@ args = parser.parse_args()
 
 
 def roi_bio_analyzer(locus_name, exons, ins_amb='insoluble_ambiguities', dec_uni='decidable_uniqueness'):
+    time_start = time.time()
     exons = [int(i) for i in exons]
-    uniq_alleles = set()  # содержит названия уникальных аллелей
+    amb_alleles = [] # содержит множество неуникальных аллелей
+    uniq_alleles = []  # содержит названия уникальных аллелей
     allele_names = []  # лист имен аллелей
     total_exon_names_seqs = []  # лист для хранение отображений последовательностей на экзоны
     hla = SeqIO.parse('hla.dat', 'imgt')  # создает генератор
@@ -29,25 +31,29 @@ def roi_bio_analyzer(locus_name, exons, ins_amb='insoluble_ambiguities', dec_uni
     allele_exon = dict(zip(allele_names, total_exon_names_seqs))
     df = pd.DataFrame(allele_exon)  # создаем dataframe,  где индексы - экзоны, колонки -аллели
     df = df.loc[exons,].reset_index().drop(labels='index', axis=1)  # ресет индексов для итерации
-    solved_alleles = []  # хранит имена неразрешимых неоднозначных аллелей, чтобы лишний раз по ним не проходить
+    solved_alleles = []  # лежат имена аллелей, по которым уже прошлись
     for allele_name in allele_names:
         if allele_name in solved_alleles:
-            continue  # пропускаем, так как аллель уже обработан в прошлом запросе
-        for i in df.index:
-            df.loc[i,] = df.loc[i,].fillna(value=df[allele_name][i])  # Nan=последовательность аллели
-        bool_array = df.apply(lambda x: sum(x == df[allele_name]) == len(df.index)).tolist()  # поэкзонное сравнение
-        if sum(bool_array) == 1:  # аллель совпала только с собой
-            for elm in compress(allele_name, bool_array):  # находим эту аллель по бинарному ключу
-                uniq_alleles.add(elm)  # добавляем в множестно уникальных аллелей
+            continue  # аллель уже решена, идем к другой
+        dt = df.copy()  # выглядит страшно, но по времени занимает около 0.00004 секунды
+        dt.loc[:, allele_name] = dt.loc[:, allele_name].fillna(value='press F to pay respect for Misha')  # пасхалочка
+        for i in dt.index:
+            dt.loc[i,] = dt.loc[i,].fillna(value=dt[allele_name][i])  # Nan = экзонная последовательность сравнения
+            bool = dt.loc[i,] == dt.loc[i, allele_name]  # pandas.Series совпадает/не совпадает allele
+            dt = dt.loc[:, bool]  # оставляем колонки, которые только совпали
+        set_of_names = set(dt.columns)  # множество из имен совпавщих колонок (аллелей)
+        solved_alleles.extend(set_of_names)  # все аллели из множества считаются решенными
+        if len(set_of_names) > 1:
+            amb_alleles.append(set_of_names)  # если множество больше 1, добавляем в неразрешимые неоднозначности
         else:
-            amb_alleles = set(compress(allele_names, bool_array))  # множество уникальных аллелей по бинарному ключу
-            solved_alleles.extend(amb_alleles)
-            with open(ins_amb, 'a') as out:
-                out.write(f'{amb_alleles}' + '\n')  # записываем множество неуникальных аллелей
-    with open(dec_uni, 'a') as out:
+            uniq_alleles.append(set_of_names)  # аллель совпала сама с собой
+    with open(f'{ins_amb}_{args.locus}_exons_{exons}', 'a') as out:
+        for elm in amb_alleles:
+            out.write(f'{elm}' + '\n')  # записывет неразрешимые неоднозначности
+    with open(f'{dec_uni}_{args.locus}_exons_{exons}', 'a') as out:
         for elm in uniq_alleles:
-            out.write(f'{elm}' + '\n')  # записываем множество уникальных аллелей
-    return "The program has finished it's work"
+            out.write(f'{elm}' + '\n')  # записывает  уникальные аллели
+    return f"The program has finished it's work, it has been taking {time.time() - time_start} seconds for finishing"
 
 
 if __name__ == '__main__':
