@@ -4,19 +4,25 @@ import time
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('locus', help="HLA prefix and gene. Example: HLA-A", type=str)
-parser.add_argument('exons', help='Enter the numbers of exons, separated by space. Example: 2 3 4', nargs='+')
+parser.add_argument('-l', '--locus', default='HLA-A', type=str, help="HLA prefix and gene. Example: HLA-A", )
+parser.add_argument('-i', '--imgt_file', default='hla.dat', type=str, help='Enter path for the database')
+parser.add_argument('-e', '--exons', help='Enter the numbers of exons, separated by space. Example: 2 3 4', nargs='+')
+parser.add_argument('-a', '--amb', type=str,
+                    help='Enter the path for ambiguous alleles output. Example ~/Documents/amb')
+parser.add_argument('-u', '--unq', type=str,
+                    help='Enter the path for nonambiguous alleles output. Example ~/Documents/uni')
 args = parser.parse_args()
 
 
-def roi_bio_analyzer(locus_name, exons, ins_amb='insoluble_ambiguities', dec_uni='decidable_uniqueness'):
+def roi_bio_analyzer(locus_name, exons, ins_amb='insoluble_ambiguities', dec_uni='decidable_uniqueness',
+                     base='hla.dat'):
     time_start = time.time()
     exons = [int(i) for i in exons]
-    amb_alleles = [] # содержит множество неуникальных аллелей
+    amb_alleles = []  # содержит множество неуникальных аллелей
     uniq_alleles = []  # содержит названия уникальных аллелей
     allele_names = []  # лист имен аллелей
     total_exon_names_seqs = []  # лист для хранение отображений последовательностей на экзоны
-    hla = SeqIO.parse('hla.dat', 'imgt')  # создает генератор
+    hla = SeqIO.parse(base, 'imgt')  # создает генератор
     for allele in hla:
         if allele.description.split(',')[0].startswith(locus_name) and len(
                 allele.seq) > 1:  # сортировка по названию и существующей последовательности
@@ -47,14 +53,15 @@ def roi_bio_analyzer(locus_name, exons, ins_amb='insoluble_ambiguities', dec_uni
             amb_alleles.append(set_of_names)  # если множество больше 1, добавляем в неразрешимые неоднозначности
         else:
             uniq_alleles.append(set_of_names)  # аллель совпала сама с собой
-    with open(f'{ins_amb}_{args.locus}_exons_{exons}', 'a') as out:
+    with open(ins_amb, 'a') as out:
         for elm in amb_alleles:
             out.write(f'{elm}' + '\n')  # записывет неразрешимые неоднозначности
-    with open(f'{dec_uni}_{args.locus}_exons_{exons}', 'a') as out:
+    with open(dec_uni, 'a') as out:
         for elm in uniq_alleles:
             out.write(f'{elm}' + '\n')  # записывает  уникальные аллели
     return f"The program has finished it's work, it has been taking {time.time() - time_start} seconds for finishing"
 
 
 if __name__ == '__main__':
-    print(roi_bio_analyzer(locus_name=args.locus, exons=args.exons))
+    print(roi_bio_analyzer(locus_name=args.locus, exons=args.exons, ins_amb=args.amb, dec_uni=args.unq,
+                           base=args.imgt_file))
