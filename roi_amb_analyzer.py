@@ -45,8 +45,8 @@ def roi_bio_analyzer(locus_name, exons, ins_amb='insoluble_ambiguities', dec_uni
         dt.loc[:, allele_name] = dt.loc[:, allele_name].fillna(value='press F to pay respect for Misha')  # пасхалочка
         for i in dt.index:
             dt.loc[i,] = dt.loc[i,].fillna(value=dt[allele_name][i])  # Nan = экзонная последовательность сравнения
-            bool = dt.loc[i,] == dt.loc[i, allele_name]  # pandas.Series совпадает/не совпадает allele
-            dt = dt.loc[:, bool]  # оставляем колонки, которые только совпали
+            bools = dt.loc[i,] == dt.loc[i, allele_name]  # pandas.Series совпадает/не совпадает allele
+            dt = dt.loc[:, bools]  # оставляем колонки, которые только совпали
         set_of_names = set(dt.columns)  # множество из имен совпавщих колонок (аллелей)
         solved_alleles.extend(set_of_names)  # все аллели из множества считаются решенными
         if len(set_of_names) > 1:
