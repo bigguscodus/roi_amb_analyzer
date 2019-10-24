@@ -1,24 +1,21 @@
 from Bio import SeqIO
 import pandas as pd
-import time
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-l', '--locus', default='HLA-A', type=str, help="HLA prefix and gene. Example: HLA-A", )
+parser.add_argument('-l', '--locus', help="HLA prefix and gene. Example: HLA-A", )
 parser.add_argument('-i', '--imgt_file', default='hla.dat', type=str, help='Enter path for the database')
 parser.add_argument('-e', '--exons', help='Enter the numbers of exons, separated by space. Example: 2 3 4', nargs='+')
-parser.add_argument('-a', '--amb', type=str,
+parser.add_argument('-a', '--amb',
                     help='Enter the path for ambiguous alleles output. Example ~/Documents/amb')
-parser.add_argument('-u', '--unq', type=str,
+parser.add_argument('-u', '--unq',
                     help='Enter the path for nonambiguous alleles output. Example ~/Documents/uni')
 args = parser.parse_args()
 
 
-def roi_bio_analyzer(locus_name, exons, ins_amb='insoluble_ambiguities', dec_uni='decidable_uniqueness',
-                     base='hla.dat'):
-    time_start = time.time()
+def roi_bio_analyzer(locus_name, exons, unsolvable_ambiguity, decidable_uniqueness, base):
     exons = [int(i) for i in exons]
-    amb_alleles = []  # содержит множество неуникальных аллелей
+    ambiguity_alleles = []  # содержит множество неуникальных аллелей
     uniq_alleles = []  # содержит названия уникальных аллелей
     allele_names = []  # лист имен аллелей
     total_exon_names_seqs = []  # лист для хранение отображений последовательностей на экзоны
@@ -41,27 +38,29 @@ def roi_bio_analyzer(locus_name, exons, ins_amb='insoluble_ambiguities', dec_uni
     for allele_name in allele_names:
         if allele_name in solved_alleles:
             continue  # аллель уже решена, идем к другой
-        dt = df.copy()  # выглядит страшно, но по времени занимает около 0.00004 секунды
-        dt.loc[:, allele_name] = dt.loc[:, allele_name].fillna(value='press F to pay respect for Misha')  # пасхалочка
-        for i in dt.index:
-            dt.loc[i,] = dt.loc[i,].fillna(value=dt[allele_name][i])  # Nan = экзонная последовательность сравнения
-            bools = dt.loc[i,] == dt.loc[i, allele_name]  # pandas.Series совпадает/не совпадает allele
+        dt = df.copy()
+        for i in dt.index:  # для каждого ряда, а ряд это экзонная последовательность
+            if pd.isna(dt.loc[i, allele_name]):
+                continue  # аллель сравнения неотсеквенирована в этом экзоне, можно и не сравнивать, все равно там может быть что угодно
+            dt.loc[i,] = dt.loc[i,].fillna(
+                value=dt[allele_name][i])  # где нет сиквенса, вставляем сиквенс из аллели сравнения
+            bools = dt.loc[i,] == dt.loc[i, allele_name]  # строим вектор True/False  по совпадающим аллелям
             dt = dt.loc[:, bools]  # оставляем колонки, которые только совпали
         set_of_names = set(dt.columns)  # множество из имен совпавщих колонок (аллелей)
         solved_alleles.extend(set_of_names)  # все аллели из множества считаются решенными
         if len(set_of_names) > 1:
-            amb_alleles.append(set_of_names)  # если множество больше 1, добавляем в неразрешимые неоднозначности
+            ambiguity_alleles.append(set_of_names)  # если множество больше 1, добавляем в неразрешимые неоднозначности
         else:
-            uniq_alleles.append(set_of_names)  # аллель совпала сама с собой
-    with open(ins_amb, 'a') as out:
-        for elm in amb_alleles:
-            out.write(f'{elm}' + '\n')  # записывет неразрешимые неоднозначности
-    with open(dec_uni, 'a') as out:
-        for elm in uniq_alleles:
-            out.write(f'{elm}' + '\n')  # записывает  уникальные аллели
-    return f"The program has finished it's work, it has been taking {time.time() - time_start} seconds for finishing"
+            uniq_alleles.append(set_of_names)  # аллель совпала только сама с собой, она уникальна
+    with open(unsolvable_ambiguity, 'a') as out:
+        for allele in ambiguity_alleles:
+            out.write(f'{allele}' + '\n')  # записывет неразрешимые неоднозначности
+    with open(decidable_uniqueness, 'a') as out:
+        for allele in uniq_alleles:
+            out.write(f'{allele}' + '\n')  # записывает  уникальные аллели
+    return ambiguity_alleles  # возвращает неразрешимые аллели
 
 
 if __name__ == '__main__':
-    print(roi_bio_analyzer(locus_name=args.locus, exons=args.exons, ins_amb=args.amb, dec_uni=args.unq,
-                           base=args.imgt_file))
+    roi_bio_analyzer(locus_name=args.locus, base=args.imgt_file, exons=args.exons, unsolvable_ambiguity=args.amb,
+                     decidable_uniqueness=args.unq)
