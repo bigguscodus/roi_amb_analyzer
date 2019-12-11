@@ -9,5 +9,5 @@ HLA typing is a necessary step in the selection of donors for organ and tissue t
 4. test_hla_secondary_functions.py (optional)
 
 #### Examples:
-`python3 roi_amb_analyzer.py -i hla.dat -g HLA-A -e 2 3 -r 2'
-'python3 roi_amb_analyzer.py -i hla.dat -g HLA-A -e 2 3 -r 2 -a amb.txt -u uni.txt'
+1. `python3 roi_amb_analyzer.py -i hla.dat -g HLA-A -e 2 3 -r 2`
+2. `python3 roi_amb_analyzer.py -i hla.dat -g HLA-A -e 2 3 -r 2 -a amb.txt -u uni.txt`
