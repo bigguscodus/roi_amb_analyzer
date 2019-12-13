@@ -49,7 +49,7 @@ Return: tuple with two lists. Each list contains set of allele according to thei
     '''
     if data_frame is None:
         return None
-    first_level = r'HLA-[A-Z1-9]*\*[0-1]*'
+    first_level = r'HLA-[A-Z1-9]*\*[0-9]*'
     second_level = r'HLA-[A-Z1-9]*\*[0-9]*:[0-9]*'
     third_level = r'HLA-[A-Z1-9]*\*[0-9]*:[0-9]*:[0-9]*'
     fourth_level = r'HLA-[A-Z1-9]*\*[0-9]*:[0-9]*:[0-9]*:[0-9]*'
@@ -80,8 +80,9 @@ Return: tuple with two lists. Each list contains set of allele according to thei
                     prefix = [allele]
                 if prefix[0] not in prefix_set:
                     prefix_set.add(prefix[0])
-                    after_set.add(allele)
-            ambiguity_alleles.append(after_set)  # если множество больше 1, добавляем в неразрешимые неоднозначности
+                    after_set.add(prefix[0])
+            if len(after_set)>1:
+                ambiguity_alleles.append(after_set)  # если множество больше 1, добавляем в неразрешимые неоднозначности
         else:
             uniq_alleles.append(set_of_names[0])
     return (ambiguity_alleles, uniq_alleles)
