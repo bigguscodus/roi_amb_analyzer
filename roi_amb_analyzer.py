@@ -1,26 +1,25 @@
-from Bio import SeqIO
-import re
+import argparse
+from HLA_secondary_functions import hla_parser
+from HLA_secondary_functions import hla_filter_framer
+from HLA_secondary_functions import hla_allele_solver
+from HLA_secondary_functions import hla_allele_writer
 
-allele_names = []  # лист имен аллелей
-total_exon_names_seqs = []  # лист для хранение отображений последовательностей на экзоны
-hla = SeqIO.parse('hla.dat', 'imgt')  # создает генератор
-for allele in hla:
-    allele_names.append(allele.description.split(',')[0])  # захват классификационного названия аллели из описания
-    exon_seqs = []
-    for feature in allele.features:
-        if feature.type == 'exon':  # захват экзонов
-            slices = re.findall('[0-9]*', str(feature.location))[1:4:2]  # захват концов экзонных отрезков
-            exon_seqs.append(allele.seq[int(slices[0]):int(slices[1])])  # слайс аллельной последовательности по экзонам
-    exon_names = [str(feature) + ' exon' for feature in
-                  range(1, len(exon_seqs) + 1)]  # формирование one-based последовательности экзонов
-    exon_names_seqs = dict(zip(exon_names, exon_seqs))  # отображение экзонных последовательностей на номера экзонов
-    total_exon_names_seqs.append(exon_names_seqs)
-allele_info = dict(zip(allele_names, total_exon_names_seqs))  # отображение экзонов на имена аллелей
-#Вывести имена всех аллелей
-#for allele_name in allele_info:
-    #print(allele_name)
-#Вывести имена и все экзонные последовательности
-#for allele_name, value in allele_info.items():
-    #print(allele_name, value)
-#Адресный запрос
-#print(allele_info['HLA-A*01:01:01:01']['1 exon'])
+parser = argparse.ArgumentParser()
+parser.add_argument('-i', '--imgt_file', default='hla.dat', help='Enter path to the database')
+parser.add_argument('-g', '--gene', required=True, help="HLA prefix and gene. Example: HLA-A")
+parser.add_argument('-e', '--exon_numbers', required=True,
+                    help='Enter the numbers of exons, separated by space. Example: 2 3 4',
+                    nargs='+')
+parser.add_argument('-a', '--amb',
+                    help='Enter the path for ambiguous alleles output. Example ~/Documents/amb')
+parser.add_argument('-u', '--unq',
+                    help='Enter the path for nonambiguous alleles output. Example ~/Documents/uni')
+parser.add_argument('-r', '--resolution', required=True,
+                    help='Determines the level of detail of the alleles in a result according to nomenclature. '
+                         'Levels are: 1,2,3,4')
+args = parser.parse_args()
+allele_exons_seqs = hla_parser(data=args.imgt_file, gene=args.gene)
+data_frame = hla_filter_framer(allele_exon_dict=allele_exons_seqs, exon_numbers=args.exon_numbers)
+allele_lists = hla_allele_solver(data_frame=data_frame, resolution=args.resolution)
+hla_allele_writer(allele_lists=allele_lists, amb_allele_file=args.amb, uniq_allele_file=args.unq, gene=args.gene,
+                  exon_numbers=args.exon_numbers, resolution=args.resolution)
