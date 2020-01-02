@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
-python3 test_hla_secondary_functions.py 
+set -e
+. ~/PycharmProjects/parseq_lab/venv/bin/activate
+PYTHONPATH=. python test_hla_secondary_functions.py 
 
 
